@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR View</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            margin: 0;
+            font-family: 'Poppins', sans-serif;
+            background: #000;
+            color: #fff;
+            height: 100vh;
+            overflow: hidden;
+        }
+        /* Fullscreen camera background */
+        
+        #camera-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            z-index: 1;
+            background: #000;
+        }
+        /* Gradient overlay for readability */
+        
+        .scrim {
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(0, 0, 0, 0.08) 0%, rgba(0, 0, 0, 0.45) 55%, rgba(0, 0, 0, 0.85) 100%);
+            z-index: 2;
+            pointer-events: none;
+        }
+        
+        .scan-grid {
+            position: fixed;
+            inset: 0;
+            z-index: 2;
+            background-image: linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+            background-size: 24px 24px, 24px 24px;
+            mix-blend-mode: overlay;
+            pointer-events: none;
+            animation: gridPulse 3s ease-in-out infinite;
+        }
+        
+        @keyframes gridPulse {
+            0%,
+            100% {
+                opacity: .25
+            }
+            50% {
+                opacity: .4
+            }
+        }
+        /* Top bar */
+        
+        .top-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 14px 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 3;
+        }
+        
+        .back-btn {
+            background: rgba(255, 255, 255, 0.14);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            padding: 8px 12px;
+            border-radius: 12px;
+            cursor: pointer;
+            backdrop-filter: blur(6px);
+        }
+        
+        #site-name {
+            font-size: 18px;
+            font-weight: 600;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 12px;
+            backdrop-filter: blur(6px);
+        }
+        /* Floating action buttons */
+        
+        .fab-row {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: grid;
+            grid-auto-flow: column;
+            gap: 12px;
+            z-index: 4;
+        }
+        
+        .fab {
+            background: linear-gradient(135deg, rgba(106, 17, 203, 0.92), rgba(37, 117, 252, 0.92));
+            border: none;
+            color: #fff;
+            padding: 12px 14px;
+            border-radius: 14px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+            min-width: 120px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        /* Bottom sheet info panel */
+        
+        .sheet {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(18, 18, 18, 0.92);
+            backdrop-filter: blur(10px);
+            color: #eee;
+            border-top-left-radius: 18px;
+            border-top-right-radius: 18px;
+            padding: 16px 16px 24px 16px;
+            z-index: 5;
+            max-height: 60vh;
+            transform: translateY(110%);
+            transition: transform 240ms ease;
+            overflow-y: auto;
+        }
+        
+        .drag-handle {
+            width: 48px;
+            height: 5px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.35);
+            margin: 0 auto 10px auto;
+        }
+        
+        .sheet.open {
+            transform: translateY(0);
+        }
+        
+        .sheet h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #fff;
+        }
+        
+        .sheet-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        
+        .close-btn {
+            background: rgba(255, 255, 255, 0.12);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.24);
+            padding: 6px 10px;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+        
+        .sheet .content {
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+        
+        .video-container {
+            position: relative;
+            padding-bottom: 56.25%;
+            height: 0;
+            overflow: hidden;
+            border-radius: 12px;
+            background: #000;
+        }
+        
+        .video-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: 0;
+        }
+        
+        .permission {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 6;
+            background: rgba(20, 20, 20, 0.9);
+            padding: 20px;
+            border-radius: 14px;
+            display: none;
+            text-align: center;
+        }
+        
+        .permission button {
+            margin-top: 10px;
+        }
+        
+        @keyframes pop {
+            from {
+                transform: translateY(110%);
+            }
+            to {
+                transform: translateY(0);
+            }
+        }
+        
+        @media (max-width: 520px) {
+            .fab-row {
+                grid-auto-flow: row;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                width: calc(100% - 24px);
+                left: 12px;
+                right: 12px;
+                transform: none;
+            }
+            .fab {
+                min-width: auto;
+                justify-content: center;
+                font-size: 13px;
+            }
+        }
+        
+        .toast {
+            position: fixed;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: 100px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 10px 14px;
+            border-radius: 12px;
+            z-index: 7;
+            display: none;
+        }
+        /* AR stage and overlay elements */
+        
+        .stage {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            border-radius: 0;
+            overflow: hidden;
+            box-shadow: none;
+            background: transparent;
+        }
+        /* Override camera to live inside stage */
+        
+        .stage #camera-bg {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+            background: #000;
+        }
+        
+        .hud {
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            background: radial-gradient(ellipse at 50% 120%, rgba(0, 0, 0, 0.0) 0%, rgba(0, 0, 0, 0.35) 60%, rgba(0, 0, 0, 0.65) 100%);
+            pointer-events: none;
+        }
+        
+        .scan-grid {
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+            background-size: 24px 24px, 24px 24px;
+            mix-blend-mode: overlay;
+            animation: gridPulse 3s ease-in-out infinite;
+            pointer-events: none;
+        }
+        
+        @keyframes gridPulse {
+            0%,
+            100% {
+                opacity: .25
+            }
+            50% {
+                opacity: .4
+            }
+        }
+        
+        .top-bar {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            right: 12px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            z-index: 3;
+        }
+        
+        .option-grid {
+            position: absolute;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-rows: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            z-index: 4;
+        }
+        
+        .option {
+            background: linear-gradient(135deg, rgba(106, 17, 203, 0.92), rgba(37, 117, 252, 0.92));
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            color: #fff;
+            padding: 10px 12px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            pointer-events: auto;
+        }
+        
+        .content-panel {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 4;
+            background: rgba(18, 18, 18, 0.82);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 14px;
+            width: min(80%, 860px);
+            aspect-ratio: 1 / 1;
+            padding: 12px 14px;
+            display: none;
+            overflow: hidden;
+        }
+        
+        .content-panel.wide {
+            aspect-ratio: 16 / 9;
+            width: min(88%, 1000px);
+        }
+        
+        .panel-title {
+            margin: 0 0 6px 0;
+            font-size: 15px;
+            color: #fff;
+        }
+        
+        .panel-body {
+            position: relative;
+            width: 100%;
+            height: calc(100% - 24px);
+            overflow: auto;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #eaeaea;
+        }
+        
+        .video-container {
+            position: relative;
+            padding-bottom: 56.25%;
+            height: 0;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #000;
+        }
+        
+        .video-container iframe {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            border: 0;
+        }
+        
+        @media (max-width: 640px) {
+            .panel {
+                width: 96vw;
+                height: 86vh;
+                border-radius: 12px;
+            }
+            .panel.video {
+                height: 92vh;
+            }
+            .chips {
+                gap: 6px;
+            }
+            .chip {
+                padding: 6px 8px;
+                font-size: 12px;
+            }
+        }
+        /* New: panel UI like screenshot */
+        
+        .stage-title {
+            position: absolute;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 5;
+            margin: 0;
+            font-size: 20px;
+            font-weight: 700;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+        }
+        
+        .panel {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: min(95vw, 1200px);
+            height: min(84vh, 860px);
+            z-index: 5;
+            background: rgba(255, 255, 255, 0.12);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .panel.video {
+            height: min(92vh, 940px);
+        }
+        
+        .panel-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.25);
+        }
+        
+        .btn {
+            background: #3b82f6;
+            color: #fff;
+            border: 0;
+            padding: 8px 12px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        
+        .btn.secondary {
+            background: rgba(255, 255, 255, 0.16);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+        }
+        
+        .chips {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-left: 6px;
+        }
+        
+        .chip {
+            background: #f59e0b;
+            color: #1f2937;
+            border: 0;
+            padding: 6px 10px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 700;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+        }
+        
+        .chip.active {
+            outline: 2px solid rgba(255, 255, 255, 0.5);
+        }
+        
+        .panel-body {
+            position: relative;
+            padding: 12px;
+            overflow: auto;
+            height: 100%;
+        }
+        
+        .panel-body .text {
+            font-size: 14px;
+            line-height: 1.8;
+            color: #f5f5f5;
+        }
+        
+        .panel.video .panel-body-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .panel.video .panel-body-inner iframe {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            border: 0;
+        }
+        /* Parallax AR-like effect for video */
+        
+        .panel.video .panel-body-inner {
+            perspective: 900px;
+            transform-style: preserve-3d;
+        }
+        
+        .ar-parallax {
+            will-change: transform;
+            transition: transform 30ms linear;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="stage">
+        <video id="camera-bg" autoplay muted playsinline></video>
+        <div class="hud"></div>
+        <div class="scan-grid"></div>
+
+        <h3 id="stage-title" class="stage-title">Loading...</h3>
+        <div class="panel" id="ui-panel">
+            <div class="panel-header">
+                <button class="btn secondary" onclick="window.location.href='/'">← Go Back</button>
+                <div class="chips">
+                    <button class="chip" id="chip-history" onclick="openInfo('history')">History</button>
+                    <button class="chip" id="chip-overview" onclick="openInfo('overview')">Overview</button>
+                    <button class="chip" id="chip-facts" onclick="openInfo('facts')">Facts</button>
+                    <button class="chip" id="chip-video" onclick="openInfo('video')">Video</button>
+                </div>
+                <div style="margin-left:auto"></div>
+                <button class="btn secondary" onclick="window.location.href=`/ar/${encodeURIComponent(siteName)}/anchor`" id="anchorBtn">Anchored AR</button>
+                <button class="btn" onclick="stopCamera()">Stop AR</button>
+            </div>
+            <div class="panel-body" id="panel-body-wrapper">
+                <div id="panel-body" class="text"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="permission" class="permission">
+        <div>Allow camera access to view content in AR mode.</div>
+        <button class="back-btn" onclick="startCamera()">Enable Camera</button>
+    </div>
+
+    <script>
+        const siteName = "{{ site_name }}";
+        let siteData = null;
+
+        function startCamera() {
+            const vid = document.getElementById('camera-bg');
+            navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment'
+                    }
+                })
+                .then(stream => {
+                    vid.srcObject = stream;
+                    document.getElementById('permission').style.display = 'none';
+                })
+                .catch(() => {
+                    document.getElementById('permission').style.display = 'block';
+                });
+        }
+
+        function stopCamera() {
+            const vid = document.getElementById('camera-bg');
+            const tracks = vid.srcObject ? vid.srcObject.getTracks() : [];
+            tracks.forEach(t => t.stop());
+        }
+
+        function toEmbedUrl(url) {
+            if (!url) return '';
+            try {
+                const u = new URL(url);
+                if (u.hostname.includes('youtube.com')) {
+                    if (u.pathname === '/watch' && u.searchParams.get('v')) {
+                        return `https://www.youtube.com/embed/${u.searchParams.get('v')}`;
+                    }
+                    if (u.pathname.startsWith('/shorts/')) {
+                        const id = u.pathname.split('/')[2];
+                        return `https://www.youtube.com/embed/${id}`;
+                    }
+                    if (u.pathname.startsWith('/embed/')) {
+                        return url;
+                    }
+                }
+                if (u.hostname === 'youtu.be') {
+                    const id = u.pathname.replace('/', '');
+                    return `https://www.youtube.com/embed/${id}`;
+                }
+                return url;
+            } catch (e) {
+                return url;
+            }
+        }
+
+        function setActiveChip(type) {
+            ['history', 'overview', 'facts', 'video'].forEach(t => {
+                const el = document.getElementById('chip-' + t);
+                if (el) {
+                    if (t === type) el.classList.add('active');
+                    else el.classList.remove('active');
+                }
+            });
+        }
+
+        function openInfo(type) {
+            if (!siteData) return;
+            const uiPanel = document.getElementById('ui-panel');
+            const bodyWrapper = document.getElementById('panel-body-wrapper');
+            // Clean up any previous parallax listener if switching away from video
+            if (window.__orientationHandler && type !== 'video') {
+                window.removeEventListener('deviceorientation', window.__orientationHandler);
+                window.__orientationHandler = null;
+            }
+
+            const labels = {
+                history: 'History',
+                overview: 'Overview',
+                facts: 'Interesting Facts',
+                video: 'Video'
+            };
+            setActiveChip(type);
+
+            if (type === 'video') {
+                const embed = toEmbedUrl(siteData[type]);
+                const src = embed ? `${embed}?autoplay=1&mute=1&playsinline=1&rel=0` : '';
+                uiPanel.classList.add('video');
+                bodyWrapper.innerHTML = src ? `
+                    <div class="panel-body-inner">
+                        <div id="video-parallax" class="ar-parallax" style="position:absolute; inset:0;">
+                          <iframe src="${src}"
+                                title="Video"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                allowfullscreen></iframe>
+                        </div>
+                    </div>` : '<div class="text">No video available.</div>';
+                // Enable AR-like parallax so the video moves with the device
+                const container = document.getElementById('video-parallax');
+                if (container && typeof DeviceOrientationEvent !== 'undefined') {
+                    const enable = () => {
+                        const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+                        const handler = (e) => {
+                            // On most devices: beta: front-back tilt (-180,180), gamma: left-right tilt (-90,90)
+                            const beta = (e.beta || 0); // x-axis
+                            const gamma = (e.gamma || 0); // y-axis
+                            const rotX = clamp(beta, -30, 30); // limit rotation for stability
+                            const rotY = clamp(gamma, -30, 30);
+                            const tx = clamp(gamma * 0.6, -18, 18); // px translate
+                            const ty = clamp(-beta * 0.6, -18, 18);
+                            container.style.transform = `translate3d(${tx}px, ${ty}px, 0) rotateX(${rotX * -0.4}deg) rotateY(${rotY * 0.6}deg)`;
+                        };
+                        // Save to remove later
+                        window.__orientationHandler = handler;
+                        window.addEventListener('deviceorientation', handler, true);
+                    };
+                    // iOS 13+ requires permission
+                    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                        DeviceOrientationEvent.requestPermission().then(state => {
+                            if (state === 'granted') enable();
+                        }).catch(() => {});
+                    } else {
+                        enable();
+                    }
+                }
+            } else {
+                uiPanel.classList.remove('video');
+                const text = siteData[type] || 'No information available.';
+                let content = '';
+
+                if (type === 'facts' && typeof text === 'string' && (text.includes('\n') || text.includes(';'))) {
+                    const parts = text.split(/\n|;/).map(s => s.trim()).filter(Boolean);
+                    content = `<ul style="margin:0; padding-left:18px;">${parts.map(p => `<li>${p}</li>`).join('')}</ul>`;
+                } else {
+                    content = text;
+                }
+                
+                bodyWrapper.innerHTML = `<div class="text">${content}</div>`;
+            }
+            uiPanel.style.display = 'flex';
+        }
+
+        function closeInfo() {
+            const panel = document.getElementById('content-panel');
+            panel.style.display = 'none';
+        }
+
+        // Close sheet by tapping outside bottom area (optional - not capturing events on video)
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeSheet();
+        });
+
+        // Fetch site data and init
+        fetch(`/site/${siteName}`)
+            .then(r => r.json())
+            .then(d => {
+                siteData = d;
+                const titleEl = document.getElementById('stage-title');
+                if (titleEl) { titleEl.textContent = siteName; }
+                const legacyName = document.getElementById('site-name');
+                if (legacyName) { legacyName.textContent = siteName; }
+                showToast(`${siteName} recognized`);
+            })
+            .catch(() => {});
+
+        // Start camera on load; stop on unload
+        startCamera();
+        window.addEventListener('beforeunload', stopCamera);
+
+        function showToast(msg) {
+            let t = document.getElementById('toast');
+            if (!t) {
+                t = document.createElement('div');
+                t.id = 'toast';
+                t.className = 'toast';
+                document.body.appendChild(t);
+            }
+            t.textContent = msg;
+            t.style.display = 'block';
+            clearTimeout(window.__toastTimer);
+            window.__toastTimer = setTimeout(() => {
+                t.style.display = 'none';
+            }, 1800);
+        }
+    </script>
+</body>
+
+</html>

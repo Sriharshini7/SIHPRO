@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <title>Anchored AR</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ar.js@3.4.5/aframe/build/aframe-ar-nft.min.js"></script>
+    <style>
+        html, body { margin: 0; padding: 0; overflow: hidden; height: 100%; background: #000; }
+        .topbar { position: fixed; top: 8px; left: 8px; right: 8px; display:flex; gap:8px; z-index: 5; }
+        .btn { background:#3b82f6; color:#fff; border:0; border-radius:10px; padding:8px 12px; font-weight:600; cursor:pointer; }
+        .btn.secondary { background: rgba(255,255,255,0.16); border:1px solid rgba(255,255,255,0.25); color:#fff; }
+        .toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 14px; background: rgba(0,0,0,0.8); color:#fff; padding:8px 12px; border-radius:10px; z-index:6; display:none; }
+        .card { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(92vw, 560px); background: rgba(18,18,18,0.84); color:#eee; border:1px solid rgba(255,255,255,0.24); border-radius: 14px; padding: 14px; display:none; z-index:7; }
+        .card h3 { margin:0 0 8px 0; }
+        .card .actions { display:flex; gap:8px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <button class="btn secondary" onclick="window.location.href='/'">← Home</button>
+        <button class="btn" onclick="window.location.href='/ar/{{ site_name }}'">Panel View</button>
+        <div style="margin-left:auto"></div>
+        <button class="btn secondary" onclick="toggleHelp()">Help</button>
+    </div>
+    <div id="toast" class="toast"></div>
+    <div id="helpCard" class="card">
+        <h3>{{ site_name }}</h3>
+        <div>Point your camera at the Hiro marker to view anchored content. If a video is available, it will play on the marker. Otherwise, you will see an info card here.</div>
+        <div class="actions">
+            <button class="btn" onclick="window.open('https://jeromeetienne.github.io/AR.js/data/images/HIRO.jpg','_blank')">Open Marker</button>
+            <button class="btn secondary" onclick="toggleHelp()">Close</button>
+        </div>
+    </div>
+
+    <a-scene
+        vr-mode-ui="enabled: false"
+        renderer="logarithmicDepthBuffer: true; antialias: true"
+        embedded
+        arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono;">
+
+        <!-- Marker: Hiro default. Users can print or display it on another screen. -->
+        <a-marker type="pattern" url="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/three.js/data/HIRO.patt">
+            <!-- Video plane. We attach a standard HTML5 video as a texture at runtime. -->
+            <a-entity id="videoPivot" position="0 0 0">
+                <a-plane id="videoPlane" rotation="-90 0 0" width="1.6" height="0.9" color="#000"></a-plane>
+                <a-text id="fallbackText" value="{{ site_name }}" align="center" color="#fff" position="0 0.1 0" rotation="-90 0 0"></a-text>
+            </a-entity>
+        </a-marker>
+
+        <a-entity camera></a-entity>
+    </a-scene>
+
+    <script>
+        const siteName = "{{ site_name }}";
+        let siteData = null;
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.style.display = 'block';
+            clearTimeout(window.__toastTimer);
+            window.__toastTimer = setTimeout(() => (t.style.display = 'none'), 1800);
+        }
+
+        function toggleHelp() {
+            const c = document.getElementById('helpCard');
+            c.style.display = (c.style.display === 'none' || !c.style.display) ? 'block' : 'none';
+        }
+
+        function toMp4Url(url) {
+            if (!url) return '';
+            try {
+                const u = new URL(url);
+                // Convert known YouTube URLs to a regular URL we cannot directly stream as mp4.
+                // For simplicity, return original; embedding YouTube as a texture is restricted by CORS/Autoplay.
+                // Recommend hosting an mp4 under static or using a CORS-enabled CDN.
+                return '';
+            } catch(e) {
+                return '';
+            }
+        }
+
+        function attachVideoTexture(videoUrl) {
+            const plane = document.querySelector('#videoPlane');
+            const text = document.querySelector('#fallbackText');
+            if (!videoUrl) {
+                text.setAttribute('value', siteName + '\nNo direct video available.');
+                return;
+            }
+            // Create HTML5 video element
+            const vid = document.createElement('video');
+            vid.setAttribute('playsinline', 'true');
+            vid.setAttribute('webkit-playsinline', 'true');
+            vid.setAttribute('muted', 'true');
+            vid.muted = true;
+            vid.loop = true;
+            vid.autoplay = true;
+            vid.src = videoUrl;
+            vid.addEventListener('canplay', () => {
+                plane.setAttribute('material', 'src', vid);
+                text.setAttribute('value', '');
+                vid.play().catch(() => {});
+                showToast('Anchored video ready');
+            });
+            vid.addEventListener('error', () => {
+                text.setAttribute('value', siteName + '\nVideo failed to load.');
+            });
+        }
+
+        fetch(`/site/${siteName}`)
+            .then(r => r.json())
+            .then(d => {
+                siteData = d;
+                // Prefer a direct mp4 under static, e.g., /static/videos/<site>.mp4 if provided in JSON
+                // If only YouTube links exist, we show the fallback text (streaming YT as texture is not supported)
+                const direct = (d && d.video && d.video.endsWith('.mp4')) ? d.video : toMp4Url(d.video);
+                attachVideoTexture(direct);
+                showToast(`${siteName} - point to Hiro marker`);
+            })
+            .catch(() => {
+                showToast('Failed to load site data');
+            });
+    </script>
+</body>
+</html>

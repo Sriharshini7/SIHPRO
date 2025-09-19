@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR Cultural Heritage</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>🌏 AR Cultural Heritage Preservation</h1>
+        <p class="subtitle">Explore India's cultural sites using AR</p>
+
+        <div class="buttons">
+            <!-- Camera button -->
+            <button class="btn" onclick="openCamera()">📸 Scan with Camera</button>
+
+            <!-- Gallery upload form -->
+            <form action="/predict" method="POST" enctype="multipart/form-data" style="display:inline;">
+                <input type="file" name="file" id="galleryInput" accept="image/*" style="display:none;" onchange="this.form.submit()">
+                <button type="button" class="btn" onclick="document.getElementById('galleryInput').click()">🖼 Upload from Gallery</button>
+            </form>
+        </div>
+
+        <!-- Video element for camera feed -->
+        <video id="cameraFeed" width="400" height="300" autoplay style="display:none;"></video>
+        <button id="captureBtn" class="btn" style="display:none;" onclick="captureImage()">Capture</button>
+
+        <div id="result"></div>
+    </div>
+
+    <script src="{{ url_for('static', filename='scripts.js') }}"></script>
+</body>
+</html>
